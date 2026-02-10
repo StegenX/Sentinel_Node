@@ -1,0 +1,198 @@
+# Sentinel Node: Distributed Monitoring System - Reference Guide
+
+This document serves as the **Source of Truth** for the Sentinel Node architecture. It outlines the system design, data flow, communication protocols, and implementation roadmap.
+
+---
+
+## 1. System Architecture & Flow
+
+Failed tasks, disconnected workers, and real-time command execution are the core concerns.
+
+### Components
+1.  **Master Server (Orchestrator)**:
+    *   **Role**: Manages worker connections, dispatches tasks, and aggregates results.
+    *   **Tech**: Node.js, Express, Socket.io, Redis (Pub/Sub + State), MongoDB (Persistence).
+2.  **Worker Node (Agent)**:
+    *   **Role**: Executes commands, monitors OS metrics, and streams output back to Master.
+    *   **Tech**: Node.js `child_process`, `os-utils`, Socket.io Client.
+3.  **Client/User**:
+    *   **Role**: Initiates tasks and views real-time logs via HTTP/WebSocket.
+
+### Data Flow: "Command Execution"
+
+1.  **User Initiation**:
+    *   User sends `POST /api/execute` to Master with `{ command: "ls -la", workerId: "worker-1" }`.
+    *   Master creates a `Task` record in MongoDB (status: `PENDING`).
+2.  **Dispatch**:
+    *   Master checks Redis for `worker-1` availability.
+    *   Master emits `TASK_REQUEST` event to `worker-1` via Socket.io.
+    *   Master updates Redis key `worker:worker-1:status` to `BUSY`.
+3.  **Execution (Worker)**:
+    *   Worker receives `TASK_REQUEST`.
+    *   Worker spawns a child process using `spawn()`.
+    *   `stdout` and `stderr` streams are captured.
+4.  **Streaming**:
+    *   As data arrives, Worker emits `STREAM_CHUNK` events to Master.
+    *   **Edge Case**: Network jitter. Master buffers chunks if necessary (though Socket.io handles TCP ordering).
+5.  **Completion**:
+    *   Process exits. Worker emits `TASK_COMPLETE` (or `TASK_FAILED`).
+    *   Worker returns to `IDLE` state.
+6.  **Persistence**:
+    *   Master saves final output and exit code to MongoDB `TaskHistory`.
+    *   Master clears volatile task state from Redis.
+
+---
+
+## 2. Database Schema Logic
+
+We use a **Hybrid Storage Strategy**:
+*   **Redis (Volatile)**: rapid state changes, presence, real-time metrics.
+*   **MongoDB (Persistent)**: audit logs, historical data, user management.
+
+### Redis Patterns
+*   **Worker State**:
+    *   Key: `worker:{id}:status` -> Value: `"IDLE" | "BUSY" | "OFFLINE"`
+    *   Key: `worker:{id}:metrics` -> Value: JSON string `{ cpu: 20, mem: 45 }` (TTL: 10s)
+*   **Active Tasks**:
+    *   Key: `task:{taskId}:active` -> Value: `workerId` (Used for crash recovery)
+
+### MongoDB Schemas (Mongoose)
+
+**1. Worker Schema** (Registration & Metadata)
+```typescript
+{
+  _id: String, // worker-uuid
+  hostname: String,
+  ipAddress: String,
+  tags: [String], // ["gpu", "linux", "us-east"]
+  status: { type: String, enum: ['ONLINE', 'OFFLINE'] },
+  lastSeen: Date
+}
+```
+
+**2. TaskHistory Schema** (Audit Log)
+```typescript
+{
+  command: String,
+  workerId: { type: String, ref: 'Worker' }, // The worker that executed it
+  status: { type: String, enum: ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED'] },
+  output: String, // Full captured stdout/stderr
+  exitCode: Number,
+  duration: Number, // ms
+  createdAt: Date,
+  completedAt: Date
+}
+```
+
+---
+
+## 3. Networking Protocol (Socket.io)
+
+### Packets & Payloads
+
+#### 1. Handshake & Auth
+*   **Event**: `connection`
+*   **Query Params**: `?workerId=uuid&token=secret`
+*   **Master Logic**: Validate token. If valid, mark worker `ONLINE` in Redis.
+
+#### 2. Task Request (Master -> Worker)
+*   **Event**: `TASK_REQUEST`
+*   **Payload**:
+    ```json
+    {
+      "taskId": "task_12345",
+      "command": "npm install",
+      "cwd": "/var/www/project" // current working directory (optional)
+    }
+    ```
+
+#### 3. Stream Chunk (Worker -> Master)
+*   **Event**: `STREAM_CHUNK`
+*   **Payload**:
+    ```json
+    {
+      "taskId": "task_12345",
+      "stream": "stdout", // or "stderr"
+      "data": "installing packages...",
+      "timestamp": 1678886400000
+    }
+    ```
+
+#### 4. Heartbeat (Worker -> Master)
+*   **Event**: `HEARTBEAT` (every 30s)
+*   **Payload**:
+    ```json
+    {
+      "workerId": "worker-1",
+      "cpuLoad": 12.5,
+      "freeMemPercentage": 40.2
+    }
+    ```
+    *   **Logic**: Master updates `lastSeen` in Mongo and metrics in Redis with TTL.
+
+---
+
+## 4. Error Handling & Edge Cases
+
+### Scenario A: Worker Disconnects Mid-Task
+1.  **Detection**: Socket.io `disconnect` event on Master.
+2.  **Immediate Action**: Mark worker `OFFLINE` in Redis and Mongo.
+3.  **Task Recovery**:
+    *   Check Redis `active_tasks` for this worker.
+    *   If a task was running, mark it as `FAILED` in Mongo.
+    *   Append error log: `"[System]: Worker disconnected unexpectedly."`
+
+### Scenario B: Command Hangs/Timeout
+1.  **Prevention**: [executor.ts](file:///home/aagharbi/Desktop/Sentinel_Node/sentinel-node/apps/worker/src/executor.ts) sends a `timeout` event if process exceeds limit (e.g., 5 mins).
+2.  **Action**: Worker sends `SIGTERM` to child process.
+3.  **Reporting**: Report `TASK_FAILED` with `EXIT_CODE: 124` (Timeout).
+
+### Scenario C: Redis Failure
+*   **Fallback**: If Redis is unreachable, Master should log error but allow read-only access to historical data (Mongo). Real-time dispatch will fail gracefully with 503 Service Unavailable.
+
+---
+
+## 5. Step-by-Step Implementation Roadmap
+
+### Phase 1: The Handshake (Core Connectivity)
+*   **Goal**: Worker connects to Master, Master logs "New Connection".
+*   **Node.js**: `socket.io` (Server), `socket.io-client` (Worker).
+*   **Deliverable**: Worker script runs, Master logs `Worker {id} connected`.
+
+### Phase 2: Heartbeat & State (Redis Integration)
+*   **Goal**: Worker sends periodic "I am alive" pulses.
+*   **Modules**: `ioredis` (Master), `os-utils` (Worker).
+*   **Logic**:
+    *   Worker emits `HEARTBEAT` with CPU/Mem.
+    *   Master saves to Redis with 10s TTL.
+    *   API endpoint `GET /workers` fetches live state from Redis.
+
+### Phase 3: The Command Executor (Child Process)
+*   **Goal**: Master sends a string, Worker runs it.
+*   **Modules**: `child_process.spawn`.
+*   **Logic**:
+    *   Master emits `TASK_REQUEST`.
+    *   Worker receives, executes `ls -la`.
+    *   Worker captures `stdout` and sends back a *single* result (no streaming yet).
+
+### Phase 4: Event Streaming (Real-time I/O)
+*   **Goal**: Handle long-running processes (e.g., `ping google.com`).
+*   **Modules**: Node.js `Stream` API.
+*   **Logic**:
+    *   Attach listeners to `child.stdout.on('data')`.
+    *   Emit `STREAM_CHUNK` for every buffer received.
+    *   Master forwards these chunks to a specific Frontend Room (using Socket.io Rooms).
+
+### Phase 5: Persistence Layer (MongoDB)
+*   **Goal**: Store history so we can see what happened yesterday.
+*   **Modules**: `mongoose`.
+*   **Logic**:
+    *   On `TASK_COMPLETE`, save full output log to Mongo.
+    *   Implement `GET /history/:workerId`.
+
+### Phase 6: Distributed Hardening
+*   **Goal**: Handle failures.
+*   **Logic**:
+    *   Implement "Scenario A" (Disconnect handling).
+    *   Add `docker-compose` scaling (multiple workers).
+    *   Basic API Auth (Master API Key).

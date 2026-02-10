@@ -1,0 +1,22 @@
+{
+    "name": "sentinel-worker",
+    "version": "1.0.0",
+    "description": "Lightweight Agent for Sentinel Node",
+    "main": "dist/client.js",
+    "scripts": {
+        "start": "node dist/client.js",
+        "dev": "ts-node src/client.ts",
+        "build": "tsc"
+    },
+    "dependencies": {
+        "socket.io-client": "^4.6.0",
+        "os-utils": "^0.0.14",
+        "dotenv": "^16.0.3"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0",
+        "ts-node": "^10.9.1",
+        "@types/node": "^18.0.0",
+        "@types/os-utils": "^0.0.2"
+    }
+}
