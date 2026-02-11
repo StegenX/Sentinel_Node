@@ -10,7 +10,7 @@ redis.on('connect', () => {
 });
 
 redis.on('error', (err) => {
-    console.log(`Connection error : ${err.message}`);
+    console.log(`Redis Connection error : ${err.message}`);
 });
 
 export async function setWorkerStatus(workerId: string, status: 'IDLE' | 'BUSY' | 'OFFLINE') : Promise<void> {

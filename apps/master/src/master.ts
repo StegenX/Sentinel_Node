@@ -7,11 +7,15 @@ import {
     getWorkerStatus,
     getAllWorkers
 } from './rediService'
+import { TaskModel } from './taskModel';
+import { connectToDatabase } from './db';
 
 interface HandshakeQuery {
     workerId: string,
     token: string,
 }
+
+
 
 const app: Express = express();
 app.use(express.json());
@@ -23,6 +27,8 @@ const io = new Server(server, {
     }
 });
 
+
+connectToDatabase();
 
 
 app.get('/workers', async (req, res) => {
@@ -49,6 +55,13 @@ app.post('/api/execute', async (req, res) => {
 
         await setWorkerStatus(workerId, 'BUSY');
 
+        const log = await TaskModel.create({
+            taskId,
+            workerId,
+            command,
+            status: 'pending',
+        });
+
         io.to(`worker:${workerId}`).emit('TASK_REQUEST', {
             taskId,
             command,
@@ -62,6 +75,79 @@ app.post('/api/execute', async (req, res) => {
 
     }
 })
+
+app.post('/api/execute/all', async (req, res) => {
+    try {
+        const { command, cwd, timeout } = req.body;
+        if (!command) {
+            return res.status(400).json({ error: 'command is required' });
+        }
+        const workers = await getAllWorkers();
+        if (workers.length === 0) {
+            return res.status(404).json({ error: 'No available workers' });
+        }
+        const taskIds: string[] = [];
+
+        for (const worker of workers) {
+            const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            taskIds.push(taskId);
+
+            await setWorkerStatus(worker.workerId, 'BUSY');
+
+            const log = await TaskModel.create({
+                taskId,
+                workerId: worker.workerId,
+                command,
+                status: 'pending',
+            });;
+            io.to(`worker:${worker.workerId}`).emit('TASK_REQUEST', {
+                taskId,
+                command,
+                cwd,
+                timeout,
+            });
+            console.log(`Task ${taskId} dispatched to ${worker.workerId}: ${command}`);
+        }
+
+        res.json({ taskIds, status: 'PENDING' });
+    }catch(err) {
+            res.status(503).json({error: 'Redis unavailable'})
+        }
+})
+
+app.get('/api/logs', async (req, res) => {
+    try {
+        const logs = await TaskModel.find().sort( { createdAt: -1 } );
+        if (!logs) {
+            return res.status(404).json({
+                message: 'No logs found',
+            });
+        }
+        res.status(200).json({
+            logs,
+        });
+    }catch(err: any) {
+        console.log(`Error: ${err.message}`);
+    }
+});
+
+app.get('/api/logs/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const logs = await TaskModel.find({ workerId: id }).sort( { createdAt: -1 } );
+        if (!logs) {
+            return res.status(404).json({
+                message: 'No worker found',
+            });
+        }
+        res.status(200).json({
+            logs,
+        });
+    }catch(err: any) {
+        console.log(`Error: ${err.message}`);
+    }
+});
+
 
 io.on('connection', async (socket) => {
     const { workerId, token } = socket.handshake.query as unknown as HandshakeQuery;
@@ -97,12 +183,28 @@ io.on('connection', async (socket) => {
     socket.on('TASK_COMPLETE', async (result) => {
         console.log(`Task ${result.taskId} completed (exit: ${result.exitCode}, duration: ${result.duration}ms)`);
         await setWorkerStatus(workerId as string, 'IDLE');
+        await TaskModel.findOneAndUpdate({ taskId: result.taskId }, {
+            status: 'completed',
+            result: {
+                exitCode: result.exitCode,
+                duration: result.duration,
+                fullOutput: result.fullOutput,
+            }
+        });
         io.to(`task:${result.taskId}`).emit('TASK_FINISHED', result);    
     });
 
         socket.on('TASK_FAILED', async (result) => {
         console.log(`Task ${result.taskId} failed (exit: ${result.exitCode}): ${result.error}`);
         await setWorkerStatus(workerId as string, 'IDLE');
+        await TaskModel.findOneAndUpdate({ taskId: result.taskId }, {
+            status: 'failed',
+            result: {
+                exitCode: result.exitCode,
+                fullOutput: result.fullOutput,
+                duration: result.duration,
+            }
+        });
         io.to(`task:${result.taskId}`).emit('TASK_FINISHED', result);
     });
 

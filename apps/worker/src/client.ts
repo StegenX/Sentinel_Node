@@ -2,7 +2,6 @@
 import { io, Socket } from 'socket.io-client';
 import { getSystemMetrics } from './monitor';
 import { executor, TaskRequest } from './executor';
-import { error } from 'console';
 
 const SERVER_URL = 'http://localhost:3000';
 const WORKER_ID = '2';
