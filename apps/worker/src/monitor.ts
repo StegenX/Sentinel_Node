@@ -3,7 +3,7 @@ import os from 'os';
 
 export interface SystemMetrics {
     cpuLoad: number,
-    freeMemPer: number,
+    freeMemPercentage: number,
 }
 
 export function getSystemMetrics(): SystemMetrics {
@@ -28,6 +28,6 @@ export function getSystemMetrics(): SystemMetrics {
 
     return {
         cpuLoad: Math.round(cpuLoad * 10) / 10,
-        freeMemPer: Math.round(freeMemPercentage * 10) / 10,
+        freeMemPercentage: Math.round(freeMemPercentage * 10) / 10,
     }
 }
