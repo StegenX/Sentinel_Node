@@ -2,7 +2,7 @@ import express, { type Express } from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 
-interface HandShakeQuery {
+interface HandshakeQuery {
     workerId: string,
     token: string,
 }
@@ -12,25 +12,34 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
+        origin: '*',
     }
 });
 
+app.get('/', (req, res) => {
+    res.send('Hello World!');
+});
+
 io.on('connection', (socket) => {
-    const { workerId, token } = socket.handshake.query as unknown as HandShakeQuery;
-    
+    const { workerId, token } = socket.handshake.query as unknown as HandshakeQuery;
     if (!workerId || !token) {
-        console.log('Connection rejected: Missing credentials.');
+        console.log('Connection Refused: invalid handshake');
         socket.disconnect();
         return;
     }
-    console.log(`Worker ${workerId} connected successfully.`);
+
+    console.log(`Connection Established: ${workerId} has been connected`);
+
+    socket.on('HEARTHBEAT', (data) => {
+        console.log(`Heartbeat from ${data.workerId}: CPU ${data.cpuLoad}%, Mem ${data.freeMemPer}%`);
+    });
+
     socket.on('disconnect', () => {
-        console.log(`Worker ${workerId} disconnected.`);
+        console.log(`Connection ended: ${workerId} has been disconnected`);
     });
 })
 
+
 server.listen(3000, () => {
-    console.log("Hi There!!");
+    console.log("Hello There");
 })
