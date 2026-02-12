@@ -1,7 +1,7 @@
 import { io } from "../master";
 import { setWorkerStatus, setWorkerMetrics } from "../services/redi.service";
-import { TaskModel } from '../models/task.model';
-import { Socket } from 'socket.io';
+import { TaskModel } from "../models/task.model";
+import { Socket } from "socket.io";
 
 interface HeartbeatInf {
   workerId: string;
@@ -17,7 +17,6 @@ interface TaskResult {
   duration: number;
 }
 
-
 export const heartBeat = async (data: HeartbeatInf) => {
   console.log(
     `Heartbeat from ${data.workerId}: CPU ${data.cpuLoad}%, Mem ${data.freeMemPercentage}%`,
@@ -26,6 +25,7 @@ export const heartBeat = async (data: HeartbeatInf) => {
     cpuLoad: data.cpuLoad as number,
     freeMemPercentage: data.freeMemPercentage as number,
   });
+  io.emit("WORKER_HEARTBEAT", data);
 };
 
 export const taskOutput = (data: TaskResult, socket: Socket) => {

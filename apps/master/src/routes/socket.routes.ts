@@ -7,7 +7,7 @@ import {
   onDisconnection,
 } from "../controllers/socket.controllers";
 
-export const socketRoutes = (socket: Socket) => {
+export const socketRoutes = (socket: Socket, workerId: string) => {
   socket.on("HEARTBEAT", heartBeat);
 
   socket.on("JOIN_TASK", (taskId) => {
@@ -17,9 +17,9 @@ export const socketRoutes = (socket: Socket) => {
 
   socket.on("STREAM_CHUNK", (data) => taskOutput(data, socket));
 
-  socket.on("TASK_COMPLETE", setTaskComplete);
+  socket.on("TASK_COMPLETE", (result) => setTaskComplete(result, workerId));
 
-  socket.on("TASK_FAILED", setTaskFailed);
+  socket.on("TASK_FAILED", (result) => setTaskFailed(result, workerId));
 
-  socket.on("disconnect", onDisconnection);
+  socket.on("disconnect", () => onDisconnection(workerId));
 };

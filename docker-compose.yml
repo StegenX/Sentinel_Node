@@ -27,6 +27,16 @@ services:
     depends_on:
       - mongo
       - redis
+  worker:
+    build: 
+      context: ./apps/worker
+    environment:
+      - SECRET_TOKEN=${SECRET_TOKEN}
+      - MACHINE_ID=${MACHINE_ID}
+      - SERVER_URL=${SERVER_URL}
+    depends_on:
+      - master
+
 
 volumes:
   mongo-data:

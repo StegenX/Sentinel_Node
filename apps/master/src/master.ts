@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { routes } from "./routes/workers.routes";
 import dotenv from "dotenv";
 import { socketRoutes } from "./routes/socket.routes";
+import cors from "cors";
 
 dotenv.config();
 
@@ -18,6 +19,11 @@ interface HandshakeQuery {
 
 const app: Express = express();
 app.use(express.json());
+app.use(
+  cors({
+    origin: "*",
+  }),
+);
 const server = http.createServer(app);
 
 export const io = new Server(server, {
@@ -50,24 +56,22 @@ io.on("connection", async (socket) => {
   const { workerId, signature, timestamp } = socket.handshake
     .query as unknown as HandshakeQuery;
 
-  if (!workerId) {
-    console.log("Connection Refused: invalid handshake");
-    socket.disconnect();
-    return;
+  if (workerId) {
+    const isRealWorker = verify(workerId, signature, timestamp);
+
+    if (!isRealWorker) {
+      console.log("Connection Refused: invalid signature");
+      socket.disconnect();
+      return;
+    }
+    socket.join(`worker:${workerId}`);
+    console.log(`Connection Established: ${workerId} has been connected`);
+    await setWorkerStatus(workerId as string, "IDLE");
+  } else {
+    console.log(`Frontend Client Connected: ${socket.id}`);
   }
 
-  const isRealWorker = verify(workerId, signature, timestamp);
-
-  if (!isRealWorker) {
-    console.log("Connection Refused: invalid signature");
-    socket.disconnect();
-    return;
-  }
-  socket.join(`worker:${workerId}`);
-  console.log(`Connection Established: ${workerId} has been connected`);
-
-  await setWorkerStatus(workerId as string, "IDLE");
-  socketRoutes(socket);
+  socketRoutes(socket, workerId);
 });
 
 server.listen(3000);
