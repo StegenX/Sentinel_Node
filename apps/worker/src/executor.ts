@@ -1,4 +1,3 @@
-// TODO: Implement child_process logic
 import { spawn, ChildProcess } from "child_process";
 import { EventEmitter } from "events";
 

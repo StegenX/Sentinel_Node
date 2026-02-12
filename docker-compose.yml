@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 services:
   redis:
     image: redis:alpine
@@ -13,6 +13,20 @@ services:
     volumes:
       - mongo-data:/data/db
     restart: always
+  master:
+    build:
+      context: ./apps/master
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=${PORT}
+      - MONGO_URI=${MONGO_URI}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - SECRET_TOKEN=${SECRET_TOKEN}
+    depends_on:
+      - mongo
+      - redis
 
 volumes:
   mongo-data:

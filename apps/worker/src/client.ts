@@ -2,19 +2,31 @@
 import { io, Socket } from 'socket.io-client';
 import { getSystemMetrics } from './monitor';
 import { executor, TaskRequest } from './executor';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import crypto from 'crypto';
 
-const SERVER_URL = 'http://localhost:3000';
-const WORKER_ID = '2';
-const TOKEN = 'secret-token';
+dotenv.config();
+
+const machine_id = fs.readFileSync('/etc/machine-id', 'utf8').trim();
+
+const workerId = process.env.MACHINE_ID + machine_id;
+const secret = process.env.SECRET_TOKEN as string;
+const timestamp = Date.now().toString();
 const HEARTBEAT_INTERVAL= 30000;
 
+const signature = crypto
+    .createHmac('sha256', secret)
+    .update(workerId + timestamp)
+    .digest('hex');
 
-console.log(`Connecting to ${SERVER_URL} as ${WORKER_ID}...`);
+console.log(`Connecting to ${process.env.SERVER_URL} as ${workerId}...`);
 
-const socket: Socket = io(SERVER_URL, {
+const socket: Socket = io(process.env.SERVER_URL, {
     query: {
-        workerId: WORKER_ID,
-        token: TOKEN,
+        workerId,
+        timestamp,
+        signature,
     }
 });
 
@@ -23,7 +35,7 @@ let heartbeatTimer: NodeJS.Timeout | null = null;
 function sendHeartbeat (): void {
     const metrics = getSystemMetrics();
     socket.emit('HEARTBEAT', {
-        workerId: WORKER_ID,
+        workerId: workerId,
         ...metrics,
     });
     console.log(`Heartbeat sent: CPU: ${metrics.cpuLoad}%, Mem: ${metrics.freeMemPercentage}%`);

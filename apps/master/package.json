@@ -4,7 +4,7 @@
   "description": "Express.js Server for Sentinel Node",
   "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "node dist/master.js",
     "dev": "ts-node src/master.ts",
     "build": "tsc"
   },

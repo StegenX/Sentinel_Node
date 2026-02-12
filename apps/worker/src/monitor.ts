@@ -1,4 +1,3 @@
-// TODO: Implement OS metrics logic (os-utils)
 import os from 'os';
 
 export interface SystemMetrics {
