@@ -11,7 +11,8 @@ export const routes = Router();
 routes.get("/workers", AllWorkers);
 
 routes.post("/execute", executeWorker);
-routes.post("/execute/all", executeAll);
+// routes.post("/execute/all", executeAll);
+// routes.post("/spawn", spawnWorkers);
 
-routes.get("/logs", getLogs);
+// routes.get("/logs", getLogs);
 routes.get("/logs/:id", getWorkerLogs);

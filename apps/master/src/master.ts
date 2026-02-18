@@ -5,11 +5,9 @@ import { setWorkerStatus } from "./services/redi.service";
 import { connectToDatabase } from "./config/db";
 import crypto from "crypto";
 import { routes } from "./routes/workers.routes";
-import dotenv from "dotenv";
 import { socketRoutes } from "./routes/socket.routes";
 import cors from "cors";
 
-dotenv.config();
 
 interface HandshakeQuery {
   workerId: string;

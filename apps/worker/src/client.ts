@@ -3,6 +3,9 @@ import { getSystemMetrics } from "./monitor";
 import { executor, TaskRequest } from "./executor";
 import os from "os";
 import crypto from "crypto";
+import dotenv from 'dotenv'
+
+dotenv.config();
 
 
 const workerId = "machine_" + os.hostname();
@@ -27,14 +30,14 @@ const socket: Socket = io(process.env.SERVER_URL, {
 
 let heartbeatTimer: NodeJS.Timeout | null = null;
 
-function sendHeartbeat(): void {
-  const metrics = getSystemMetrics();
+async function sendHeartbeat() {
+  const metrics = await getSystemMetrics();
   socket.emit("HEARTBEAT", {
     workerId: workerId,
     ...metrics,
   });
   console.log(
-    `Heartbeat sent: CPU: ${metrics.cpuLoad}%, Mem: ${metrics.freeMemPercentage}%`,
+    metrics
   );
 }
 

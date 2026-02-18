@@ -7,6 +7,22 @@ interface HeartbeatInf {
   workerId: string;
   cpuLoad: number;
   freeMemPercentage: number;
+  loadAvg: number[];
+  diskUsage: {
+    size: number;
+    used: number;
+    usedPercentage: number;
+  };
+  networkTraffic: {
+    recived: number;
+    transmitted: number;
+  };
+  uptime: {
+    days: number;
+    hours: number;
+    minutes: number;
+    seconds: number;
+  };
 }
 
 interface TaskResult {

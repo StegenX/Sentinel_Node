@@ -9,14 +9,15 @@
         "build": "tsc"
     },
     "dependencies": {
-        "socket.io-client": "^4.6.0",
+        "dotenv": "^16.0.3",
         "os-utils": "^0.0.14",
-        "dotenv": "^16.0.3"
+        "socket.io-client": "^4.6.0",
+        "systeminformation": "^5.31.1"
     },
     "devDependencies": {
-        "typescript": "^5.0.0",
-        "ts-node": "^10.9.1",
         "@types/node": "^18.0.0",
-        "@types/os-utils": "^0.0.2"
+        "@types/os-utils": "^0.0.2",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.0.0"
     }
 }
