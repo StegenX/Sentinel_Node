@@ -45,13 +45,14 @@ const getCpuLoad = (): Promise<number> => {
     const start = sample();
 
     // Wait 200ms then take a second snapshot — the delta is the real current load
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       const end = sample();
       const idleDelta = end.totalIdle - start.totalIdle;
       const totalDelta = end.totalTick - start.totalTick;
       const load = 100 - (idleDelta / totalDelta) * 100;
       resolve(Math.round(load * 10) / 10);
     }, 200);
+    return () => clearTimeout(timeoutId);
   });
 };
 
@@ -107,26 +108,24 @@ const getNetworkTraffic = async () => {
         );
       });
     if (networkStat === undefined) {
-      return {
-        recived: 0,
-        transmitted: 0,
-      };
+      return { recived: 0, transmitted: 0 };
     }
-    const recived = (networkStat?.rx_bytes * 8) / Math.pow(1024, 3);
-    const transmitted = (networkStat.tx_bytes * 8) / Math.pow(1024, 3);
-    const total = recived + transmitted;
-    const recivedPercentage = (recived / total) * 100;
-    const transmittedPercentage = (transmitted / total) * 100;
+
+    const rxSec = Math.max(networkStat.rx_sec ?? 0, 0);
+    const txSec = Math.max(networkStat.tx_sec ?? 0, 0);
+    const total = rxSec + txSec;
+
+    if (total === 0) {
+      return { recived: 0, transmitted: 0 };
+    }
+
     return {
-      recived: Math.round(recivedPercentage),
-      transmitted: Math.round(transmittedPercentage),
+      recived: Math.round((rxSec / total) * 100),
+      transmitted: Math.round((txSec / total) * 100),
     };
   } catch (err: any) {
     console.log("Retriving Network stat error: " + err.message);
-    return {
-      recived: 0,
-      transmitted: 0,
-    };
+    return { recived: 0, transmitted: 0 };
   }
 };
 

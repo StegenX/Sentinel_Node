@@ -12,6 +12,7 @@ export default function Logs() {
     const [terminal, setTerminal] = useState<string[]>([]);
     const [running, setRunning] = useState(false);
     const terminalRef = useRef<HTMLDivElement>(null);
+    const activeTaskId = useRef<string | null>(null);  // track current task
 
     // Auto-select first worker
     useEffect(() => {
@@ -31,15 +32,20 @@ export default function Logs() {
     // Listen for live stream chunks and task completion
     useEffect(() => {
         function onChunk(data: StreamChunk) {
+            // Ignore chunks from other tasks (global broadcast)
+            if (data.taskId !== activeTaskId.current) return;
             const prefix = data.stream === 'stderr' ? '[ERR] ' : '';
             setTerminal(prev => [...prev, prefix + data.data]);
         }
         function onFinished(result: any) {
+            // Ignore events from other tasks
+            if (result.taskId !== activeTaskId.current) return;
             setTerminal(prev => [
                 ...prev,
                 `\n--- Task finished (exit: ${result.exitCode}, ${result.duration}ms) ---`,
             ]);
             setRunning(false);
+            activeTaskId.current = null;
             // Refresh logs
             if (selectedWorker) {
                 fetchWorkerLogs(selectedWorker).then(setLogs).catch(() => { });
@@ -67,6 +73,7 @@ export default function Logs() {
         setRunning(true);
         try {
             const { taskId } = await executeCommand(selectedWorker, command);
+            activeTaskId.current = taskId;   // store before joining room
             socket.emit('JOIN_TASK', taskId);
         } catch (err: any) {
             setTerminal(prev => [...prev, `Error: ${err.message}`]);

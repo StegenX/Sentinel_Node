@@ -34,7 +34,15 @@ services:
       - SERVER_URL=${SERVER_URL}
     depends_on:
       - master
-
+  frontend:
+    build:
+      context: ./apps/frontend
+      args:
+        - VITE_MASTER_URL=http://localhost:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - master
 
 volumes:
   mongo-data:

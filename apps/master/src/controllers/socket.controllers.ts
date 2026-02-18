@@ -45,7 +45,9 @@ export const heartBeat = async (data: HeartbeatInf) => {
 };
 
 export const taskOutput = (data: TaskResult, socket: Socket) => {
+  // Broadcast to the task room AND all frontend clients so fast commands aren't missed
   socket.to(`task:${data.taskId}`).emit("STREAM_CHUNK", data);
+  io.emit("STREAM_CHUNK", data);
 };
 
 export const setTaskComplete = async (result: TaskResult, workerId: string) => {
@@ -65,6 +67,7 @@ export const setTaskComplete = async (result: TaskResult, workerId: string) => {
     },
   );
   io.to(`task:${result.taskId}`).emit("TASK_FINISHED", result);
+  io.emit("TASK_FINISHED", result); // also broadcast globally for race-condition safety
 };
 
 export const setTaskFailed = async (result: TaskResult, workerId: string) => {
@@ -84,6 +87,7 @@ export const setTaskFailed = async (result: TaskResult, workerId: string) => {
     },
   );
   io.to(`task:${result.taskId}`).emit("TASK_FINISHED", result);
+  io.emit("TASK_FINISHED", result); // also broadcast globally for race-condition safety
 };
 
 export const onDisconnection = async (workerId: string) => {
