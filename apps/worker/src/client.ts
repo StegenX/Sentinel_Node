@@ -1,10 +1,11 @@
 import { io, Socket } from "socket.io-client";
 import { getSystemMetrics } from "./monitor";
 import { executor, TaskRequest } from "./executor";
-import fs from "fs";
+import os from "os";
 import crypto from "crypto";
 
-const workerId = process.env.MACHINE_ID;
+
+const workerId = "machine_" + os.hostname();
 const secret = process.env.SECRET_TOKEN as string;
 const timestamp = Date.now().toString();
 const HEARTBEAT_INTERVAL = 1000;

@@ -1,9 +1,9 @@
-version: "3.8"
+
 services:
   redis:
     image: redis:alpine
     ports:
-      - "6379:6379"
+      - "6370:6379"
     restart: always
 
   mongo:
@@ -32,7 +32,6 @@ services:
       context: ./apps/worker
     environment:
       - SECRET_TOKEN=${SECRET_TOKEN}
-      - MACHINE_ID=${MACHINE_ID}
       - SERVER_URL=${SERVER_URL}
     depends_on:
       - master
